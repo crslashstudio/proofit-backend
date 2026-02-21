@@ -1,0 +1,1 @@
+{"version":3,"file":"workspaces.d.ts","sourceRoot":"","sources":["../../../src/db/schema/workspaces.ts"],"names":[],"mappings":"AAEA,eAAO,MAAM,UAAU;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;EAMrB,CAAC;AAEH,MAAM,MAAM,SAAS,GAAG,OAAO,UAAU,CAAC,YAAY,CAAC;AACvD,MAAM,MAAM,YAAY,GAAG,OAAO,UAAU,CAAC,YAAY,CAAC"}

@@ -1,0 +1,29 @@
+import { Hono } from "hono";
+import type { AuthEnv } from "../../middlewares/auth.middleware.js";
+import * as workspaceService from "./workspace.service.js";
+
+const app = new Hono<AuthEnv>();
+
+/**
+ * GET /workspace/me
+ * Returns the current user's workspace (tenant isolation: workspaceId from tenant middleware).
+ */
+app.get("/me", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  const workspace = await workspaceService.getWorkspaceById(workspaceId);
+  if (!workspace) {
+    return c.json({ success: false, error: "Tenant or user not found" }, 404);
+  }
+  return c.json({
+    success: true,
+    data: {
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      ownerId: workspace.ownerId,
+      createdAt: workspace.createdAt,
+    },
+  });
+});
+
+export default app;

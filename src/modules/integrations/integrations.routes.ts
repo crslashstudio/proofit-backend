@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AuthEnv } from "../../middlewares/auth.middleware.js";
 import * as integrationsService from "./integrations.service.js";
 import { generateAuthUrl, handleCallback } from "./channels/tiktok/tiktok.oauth.js";
+import { syncOrders, syncProducts } from "./channels/tiktok/tiktok.sync.js";
 import { env } from "../../config/env.js";
 
 const app = new Hono<AuthEnv>();
@@ -32,6 +33,28 @@ app.get("/tiktok/connect", async (c) => {
   return c.json({ success: true, data: { authUrl: url } });
 });
 
+/**
+ * POST /integrations/tiktok/sync
+ * Manually trigger TikTok Shop data sync.
+ */
+app.post("/tiktok/sync", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  try {
+    const ordersResult = await syncOrders(workspaceId);
+    const productsResult = await syncProducts(workspaceId);
+    return c.json({
+      success: true,
+      data: {
+        orders: ordersResult.synced,
+        products: productsResult.synced,
+      },
+    });
+  } catch (e: any) {
+    console.error("[tiktok/sync] Manual sync error:", e);
+    return c.json({ success: false, error: e.message }, 500);
+  }
+});
+
 export default app;
 
 /**
@@ -39,7 +62,7 @@ export default app;
  */
 export const tiktokCallbackApp = new Hono().get("/", async (c) => {
   const code = c.req.query("code");
-  const state = c.req.query("state");
+  const state = c.req.query("state"); // state contains workspaceId
 
   if (!code || !state) {
     console.error("[tiktok/callback] Missing code or state", { code, state });
@@ -53,6 +76,16 @@ export const tiktokCallbackApp = new Hono().get("/", async (c) => {
   try {
     const result = await handleCallback(code, state);
     console.log("[tiktok/callback] Success:", result);
+
+    // Trigger sync automatically in the background
+    const workspaceId = state;
+    syncOrders(workspaceId).catch((err) =>
+      console.error("[tiktok/callback] Background order sync error:", err)
+    );
+    syncProducts(workspaceId).catch((err) =>
+      console.error("[tiktok/callback] Background product sync error:", err)
+    );
+
     return c.redirect(`${env.FRONTEND_URL}/settings?tiktok=connected`);
   } catch (e: any) {
     console.error("[tiktok/callback] Full Error:", e);

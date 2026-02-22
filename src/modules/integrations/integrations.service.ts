@@ -4,7 +4,7 @@ import { supabase } from "../../db/client.js";
 export async function listByWorkspace(workspaceId: string) {
   const { data, error } = await supabase
     .from("integrations")
-    .select("id, channel, shop_id, shop_name, is_active, created_at")
+    .select("*")
     .eq("workspace_id", workspaceId);
 
   if (error) {
@@ -12,16 +12,7 @@ export async function listByWorkspace(workspaceId: string) {
     throw new Error(error.message);
   }
 
-  // Map snake_case to camelCase for the frontend if needed, 
-  // though Supabase return might be used directly.
-  return data.map(item => ({
-    id: item.id,
-    channel: item.channel,
-    shopId: item.shop_id,
-    shopName: item.shop_name,
-    isActive: item.is_active,
-    createdAt: item.created_at
-  }));
+  return data;
 }
 
 export async function upsertTikTokIntegration(

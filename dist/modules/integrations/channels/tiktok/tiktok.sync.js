@@ -1,5 +1,27 @@
 import { supabase } from "../../../../db/client.js";
 import { env } from "../../../../config/env.js";
+import crypto from "crypto";
+/**
+ * Generate HMAC-SHA256 signature for TikTok Shop API v2.
+ * Reference: https://partner.tiktokshop.com/doc/page/262740
+ */
+const generateSignature = (appSecret, path, params, body = "") => {
+    // Step 1: Sort params alphabetically, exclude sign and access_token
+    const sortedParams = Object.keys(params)
+        .filter((k) => k !== "sign" && k !== "access_token")
+        .sort()
+        .map((k) => `${k}${params[k]}`)
+        .join("");
+    // Step 2: Construct base string
+    // Format: {app_secret}{path}{sorted_params}{body}{app_secret}
+    const baseString = `${appSecret}${path}${sortedParams}${body}${appSecret}`;
+    // Step 3: HMAC-SHA256
+    const signature = crypto
+        .createHmac("sha256", appSecret)
+        .update(baseString)
+        .digest("hex");
+    return signature;
+};
 // Get integration from database
 const getIntegration = async (workspaceId) => {
     const { data, error } = await supabase
@@ -17,24 +39,35 @@ const getIntegration = async (workspaceId) => {
 export const syncOrders = async (workspaceId) => {
     const integration = await getIntegration(workspaceId);
     const accessToken = integration.access_token;
-    // Get date range - last 30 days
-    const now = Math.floor(Date.now() / 1000);
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
-    const timestamp = Math.floor(Date.now() / 1000);
-    const url = `https://open-api.tiktokglobalshop.com/order/202309/orders/search?app_key=${env.TIKTOK_APP_KEY}&timestamp=${timestamp}`;
+    if (!env.TIKTOK_APP_KEY || !env.TIKTOK_APP_SECRET) {
+        throw new Error("TikTok credentials not configured");
+    }
+    const path = "/order/202309/orders/search";
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const body = JSON.stringify({
+        create_time_ge: Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60,
+        create_time_lt: Math.floor(Date.now() / 1000),
+        page_size: 100,
+        sort_field: "CREATE_TIME",
+        sort_order: "DESC",
+    });
+    const params = {
+        app_key: env.TIKTOK_APP_KEY,
+        timestamp,
+    };
+    const sign = generateSignature(env.TIKTOK_APP_SECRET, path, params, body);
+    const queryString = new URLSearchParams({
+        ...params,
+        sign,
+    }).toString();
+    const url = `https://open-api.tiktokglobalshop.com${path}?${queryString}`;
     const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "x-tts-access-token": accessToken,
         },
-        body: JSON.stringify({
-            create_time_ge: thirtyDaysAgo,
-            create_time_lt: now,
-            page_size: 100,
-            sort_field: "CREATE_TIME",
-            sort_order: "DESC",
-        }),
+        body,
     });
     const rawText = await response.text();
     console.log("[tiktok/sync] Orders raw:", rawText.substring(0, 500));
@@ -74,18 +107,32 @@ export const syncOrders = async (workspaceId) => {
 export const syncProducts = async (workspaceId) => {
     const integration = await getIntegration(workspaceId);
     const accessToken = integration.access_token;
-    const timestamp = Math.floor(Date.now() / 1000);
-    const url = `https://open-api.tiktokglobalshop.com/product/202309/products/search?app_key=${env.TIKTOK_APP_KEY}&timestamp=${timestamp}`;
+    if (!env.TIKTOK_APP_KEY || !env.TIKTOK_APP_SECRET) {
+        throw new Error("TikTok credentials not configured");
+    }
+    const path = "/product/202309/products/search";
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const body = JSON.stringify({
+        page_size: 100,
+        status: "ACTIVATE",
+    });
+    const params = {
+        app_key: env.TIKTOK_APP_KEY,
+        timestamp,
+    };
+    const sign = generateSignature(env.TIKTOK_APP_SECRET, path, params, body);
+    const queryString = new URLSearchParams({
+        ...params,
+        sign,
+    }).toString();
+    const url = `https://open-api.tiktokglobalshop.com${path}?${queryString}`;
     const response = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "x-tts-access-token": accessToken,
         },
-        body: JSON.stringify({
-            page_size: 100,
-            status: "ACTIVATE",
-        }),
+        body,
     });
     const rawText = await response.text();
     console.log("[tiktok/sync] Products raw:", rawText.substring(0, 500));

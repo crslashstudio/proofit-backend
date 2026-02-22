@@ -1,1 +1,1 @@
-{"version":3,"file":"tiktok.sync.d.ts","sourceRoot":"","sources":["../../../../../src/modules/integrations/channels/tiktok/tiktok.sync.ts"],"names":[],"mappings":"AAiBA,eAAO,MAAM,UAAU,GAAU,aAAa,MAAM;;EAoEnD,CAAC;AAGF,eAAO,MAAM,YAAY,GAAU,aAAa,MAAM;;EA+CrD,CAAC"}
+{"version":3,"file":"tiktok.sync.d.ts","sourceRoot":"","sources":["../../../../../src/modules/integrations/channels/tiktok/tiktok.sync.ts"],"names":[],"mappings":"AAgDA,eAAO,MAAM,UAAU,GAAU,aAAa,MAAM;;EAoFnD,CAAC;AAGF,eAAO,MAAM,YAAY,GAAU,aAAa,MAAM;;EAoErD,CAAC"}

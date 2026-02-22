@@ -1,12 +1,14 @@
-import { db } from "../../db/client.js";
-import { workspaces } from "../../db/schema/workspaces.js";
-import { eq } from "drizzle-orm";
+import { supabase } from "../../db/client.js";
 export async function getWorkspaceById(workspaceId) {
-    const [w] = await db
-        .select()
-        .from(workspaces)
-        .where(eq(workspaces.id, workspaceId))
-        .limit(1);
-    return w ?? null;
+    const { data, error } = await supabase
+        .from("workspaces")
+        .select("*")
+        .eq("id", workspaceId)
+        .single();
+    if (error) {
+        console.error("[workspace.service] getWorkspaceById failed:", error.message);
+        return null;
+    }
+    return data;
 }
 //# sourceMappingURL=workspace.service.js.map

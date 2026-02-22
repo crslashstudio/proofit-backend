@@ -1,8 +1,2 @@
-export declare function getWorkspaceById(workspaceId: string): Promise<{
-    id: string;
-    name: string;
-    slug: string;
-    ownerId: string;
-    createdAt: Date;
-}>;
+export declare function getWorkspaceById(workspaceId: string): Promise<any>;
 //# sourceMappingURL=workspace.service.d.ts.map

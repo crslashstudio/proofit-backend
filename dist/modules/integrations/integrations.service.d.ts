@@ -1,10 +1,10 @@
 export declare function listByWorkspace(workspaceId: string): Promise<{
-    id: string;
-    channel: "tiktok" | "shopify" | "shopee" | "lazada" | "tokopedia";
-    shopId: string | null;
-    shopName: string | null;
-    isActive: boolean;
-    createdAt: Date;
+    id: any;
+    channel: any;
+    shopId: any;
+    shopName: any;
+    isActive: any;
+    createdAt: any;
 }[]>;
 export declare function upsertTikTokIntegration(workspaceId: string, data: {
     accessToken: string;
@@ -12,28 +12,6 @@ export declare function upsertTikTokIntegration(workspaceId: string, data: {
     expiresIn: number;
     shopId?: string;
     shopName?: string;
-}): Promise<{
-    workspaceId: string;
-    id: string;
-    createdAt: Date;
-    channel: "tiktok" | "shopify" | "shopee" | "lazada" | "tokopedia";
-    accessToken: string | null;
-    refreshToken: string | null;
-    tokenExpiresAt: Date | null;
-    shopId: string | null;
-    shopName: string | null;
-    isActive: boolean;
-}>;
-export declare function getIntegrationById(id: string, workspaceId: string): Promise<{
-    workspaceId: string;
-    id: string;
-    createdAt: Date;
-    channel: "tiktok" | "shopify" | "shopee" | "lazada" | "tokopedia";
-    accessToken: string | null;
-    refreshToken: string | null;
-    tokenExpiresAt: Date | null;
-    shopId: string | null;
-    shopName: string | null;
-    isActive: boolean;
-}>;
+}): Promise<any>;
+export declare function getIntegrationById(id: string, workspaceId: string): Promise<any>;
 //# sourceMappingURL=integrations.service.d.ts.map

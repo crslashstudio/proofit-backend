@@ -1,62 +1,85 @@
-import { db } from "../../db/client.js";
-import { integrations } from "../../db/schema/integrations.js";
-import { eq, and } from "drizzle-orm";
+import { supabase } from "../../db/client.js";
 export async function listByWorkspace(workspaceId) {
-    return db
-        .select({
-        id: integrations.id,
-        channel: integrations.channel,
-        shopId: integrations.shopId,
-        shopName: integrations.shopName,
-        isActive: integrations.isActive,
-        createdAt: integrations.createdAt,
-    })
-        .from(integrations)
-        .where(eq(integrations.workspaceId, workspaceId));
+    const { data, error } = await supabase
+        .from("integrations")
+        .select("id, channel, shop_id, shop_name, is_active, created_at")
+        .eq("workspace_id", workspaceId);
+    if (error) {
+        console.error("[integrations.service] listByWorkspace failed:", error.message);
+        throw new Error(error.message);
+    }
+    // Map snake_case to camelCase for the frontend if needed, 
+    // though Supabase return might be used directly.
+    return data.map(item => ({
+        id: item.id,
+        channel: item.channel,
+        shopId: item.shop_id,
+        shopName: item.shop_name,
+        isActive: item.is_active,
+        createdAt: item.created_at
+    }));
 }
 export async function upsertTikTokIntegration(workspaceId, data) {
-    const tokenExpiresAt = new Date(Date.now() + data.expiresIn * 1000);
-    const existing = await db
-        .select()
-        .from(integrations)
-        .where(and(eq(integrations.workspaceId, workspaceId), eq(integrations.channel, "tiktok")))
-        .limit(1);
-    if (existing.length > 0) {
-        const [updated] = await db
-            .update(integrations)
-            .set({
-            accessToken: data.accessToken,
-            refreshToken: data.refreshToken ?? null,
-            tokenExpiresAt,
-            shopId: data.shopId ?? existing[0].shopId,
-            shopName: data.shopName ?? existing[0].shopName,
-            isActive: true,
+    const tokenExpiresAt = new Date(Date.now() + data.expiresIn * 1000).toISOString();
+    // Find existing integration
+    const { data: existing, error: findError } = await supabase
+        .from("integrations")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("channel", "tiktok")
+        .limit(1)
+        .maybeSingle();
+    if (findError) {
+        console.error("[integrations.service] find existing failed:", findError.message);
+        throw new Error(findError.message);
+    }
+    if (existing) {
+        const { data: updated, error: updateError } = await supabase
+            .from("integrations")
+            .update({
+            access_token: data.accessToken,
+            refresh_token: data.refreshToken ?? null,
+            token_expires_at: tokenExpiresAt,
+            shop_id: data.shopId ?? existing.shop_id,
+            shop_name: data.shopName ?? existing.shop_name,
+            is_active: true,
         })
-            .where(eq(integrations.id, existing[0].id))
-            .returning();
+            .eq("id", existing.id)
+            .select()
+            .single();
+        if (updateError)
+            throw new Error(updateError.message);
         return updated;
     }
-    const [inserted] = await db
-        .insert(integrations)
-        .values({
-        workspaceId,
+    const { data: inserted, error: insertError } = await supabase
+        .from("integrations")
+        .insert({
+        workspace_id: workspaceId,
         channel: "tiktok",
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken ?? null,
-        tokenExpiresAt,
-        shopId: data.shopId ?? null,
-        shopName: data.shopName ?? null,
-        isActive: true,
+        access_token: data.accessToken,
+        refresh_token: data.refreshToken ?? null,
+        token_expires_at: tokenExpiresAt,
+        shop_id: data.shopId ?? null,
+        shop_name: data.shopName ?? null,
+        is_active: true,
     })
-        .returning();
+        .select()
+        .single();
+    if (insertError)
+        throw new Error(insertError.message);
     return inserted;
 }
 export async function getIntegrationById(id, workspaceId) {
-    const [row] = await db
-        .select()
-        .from(integrations)
-        .where(and(eq(integrations.id, id), eq(integrations.workspaceId, workspaceId)))
-        .limit(1);
-    return row ?? null;
+    const { data, error } = await supabase
+        .from("integrations")
+        .select("*")
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .maybeSingle();
+    if (error) {
+        console.error("[integrations.service] getIntegrationById failed:", error.message);
+        return null;
+    }
+    return data;
 }
 //# sourceMappingURL=integrations.service.js.map

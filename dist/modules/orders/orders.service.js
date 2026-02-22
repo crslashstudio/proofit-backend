@@ -1,17 +1,23 @@
-import { db } from "../../db/client.js";
-import { orders } from "../../db/schema/orders.js";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { supabase } from "../../db/client.js";
 export async function listOrders(query) {
-    const conditions = [eq(orders.workspaceId, query.workspaceId)];
-    if (query.channel)
-        conditions.push(eq(orders.channel, query.channel));
-    if (query.dateFrom)
-        conditions.push(gte(orders.orderDate, query.dateFrom));
-    if (query.dateTo)
-        conditions.push(lte(orders.orderDate, query.dateTo));
-    return db
-        .select()
-        .from(orders)
-        .where(and(...conditions));
+    let queryBuilder = supabase
+        .from("orders")
+        .select("*")
+        .eq("workspace_id", query.workspaceId);
+    if (query.channel) {
+        queryBuilder = queryBuilder.eq("channel", query.channel);
+    }
+    if (query.dateFrom) {
+        queryBuilder = queryBuilder.gte("order_date", query.dateFrom);
+    }
+    if (query.dateTo) {
+        queryBuilder = queryBuilder.lte("order_date", query.dateTo);
+    }
+    const { data, error } = await queryBuilder;
+    if (error) {
+        console.error("[orders.service] listOrders failed:", error.message);
+        throw new Error(error.message);
+    }
+    return data;
 }
 //# sourceMappingURL=orders.service.js.map

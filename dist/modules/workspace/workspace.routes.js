@@ -9,7 +9,7 @@ app.get("/me", async (c) => {
     const workspaceId = c.get("workspaceId");
     const workspace = await workspaceService.getWorkspaceById(workspaceId);
     if (!workspace) {
-        return c.json({ success: false, error: "Workspace not found" }, 404);
+        return c.json({ success: false, error: "Tenant or user not found" }, 404);
     }
     return c.json({
         success: true,

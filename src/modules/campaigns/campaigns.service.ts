@@ -1,6 +1,4 @@
-import { db } from "../../db/client.js";
-import { campaigns } from "../../db/schema/campaigns.js";
-import { eq, and } from "drizzle-orm";
+import { supabase } from "../../db/client.js";
 import type { Channel } from "../../db/schema/integrations.js";
 
 export interface ListCampaignsQuery {
@@ -9,10 +7,21 @@ export interface ListCampaignsQuery {
 }
 
 export async function listCampaigns(query: ListCampaignsQuery) {
-  const conditions = [eq(campaigns.workspaceId, query.workspaceId)];
-  if (query.channel) conditions.push(eq(campaigns.channel, query.channel));
-  return db
-    .select()
-    .from(campaigns)
-    .where(and(...conditions));
+  let queryBuilder = supabase
+    .from("campaigns")
+    .select("*")
+    .eq("workspace_id", query.workspaceId);
+
+  if (query.channel) {
+    queryBuilder = queryBuilder.eq("channel", query.channel);
+  }
+
+  const { data, error } = await queryBuilder;
+
+  if (error) {
+    console.error("[campaigns.service] listCampaigns failed:", error.message);
+    throw new Error(error.message);
+  }
+
+  return data;
 }

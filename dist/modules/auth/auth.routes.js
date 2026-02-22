@@ -6,6 +6,7 @@ const app = new Hono();
 const registerSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
+    name: z.string().min(1).max(255).optional(),
     workspaceName: z.string().min(1).max(255),
 });
 const loginSchema = z.object({
@@ -25,7 +26,9 @@ app.post("/register", zValidator("json", registerSchema), async (c) => {
     catch (e) {
         const message = e instanceof Error ? e.message : "Registration failed";
         console.error("[auth/register] Route error:", e);
-        return c.json({ success: false, error: message }, 400);
+        const isAlreadyRegistered = message.toLowerCase().includes("already registered") ||
+            message.toLowerCase().includes("email already registered");
+        return c.json({ success: false, error: message }, isAlreadyRegistered ? 409 : 400);
     }
 });
 /**

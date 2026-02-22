@@ -8,7 +8,10 @@ export async function getWorkspaceById(workspaceId: string) {
     .single();
 
   if (error) {
-    console.error("[workspace.service] getWorkspaceById failed:", error.message);
+    console.error(
+      "[workspace.service] getWorkspaceById failed:",
+      error.message
+    );
     return null;
   }
 

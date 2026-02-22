@@ -5,7 +5,6 @@ import type { AuthEnv } from "./auth.middleware.js";
 /**
  * Resolves workspace_id for the current user (multi-tenant isolation).
  * Must run after authMiddleware so supabaseUserId is set.
- * Looks up our users table by supabase_user_id and attaches workspaceId to context.
  */
 export const tenantMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   const supabaseUserId = c.get("supabaseUserId");
@@ -20,7 +19,7 @@ export const tenantMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     .single();
 
   if (error || !userRecord) {
-    console.error("[tenant] No user row or error for supabase_user_id:", supabaseUserId, error?.message);
+    console.error("[tenant] No user row for supabase_user_id:", supabaseUserId, error?.message);
     return c.json(
       { success: false, error: "Tenant or user not found" },
       403

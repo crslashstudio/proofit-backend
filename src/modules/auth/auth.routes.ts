@@ -8,6 +8,7 @@ const app = new Hono();
 const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+  name: z.string().min(1).max(255).optional(),
   workspaceName: z.string().min(1).max(255),
 });
 

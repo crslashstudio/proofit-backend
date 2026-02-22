@@ -1,8 +1,18 @@
-import { supabase } from "../../db/client.js";
+import { createClient } from "@supabase/supabase-js";
+import { env } from "../../config/env.js";
+
+// Standalone Supabase client for Auth Service
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
 
 export interface RegisterInput {
   email: string;
   password: string;
+  name?: string;
   workspaceName: string;
 }
 
@@ -11,116 +21,109 @@ export interface LoginInput {
   password: string;
 }
 
-function slugFromName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "workspace";
-}
+export const register = async (input: RegisterInput) => {
+  const { email, password, workspaceName } = input;
+  console.log("[auth/register] Step 1: Create auth user", { email });
 
-/**
- * Register: create Supabase Auth user, then create workspace and link user in our DB.
- * Multi-tenant: one workspace per signup; owner_id and users row establish isolation.
- */
-export async function register(input: RegisterInput) {
-  console.log("[auth/register] Step 1: Creating auth user via admin API", { email: input.email });
-
-  // Use admin API to create user directly without email confirmation for now
-  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email: input.email,
-    password: input.password,
-    email_confirm: true,
-  });
+  // Step 1: Create auth user via admin API
+  const { data: authData, error: authError } =
+    await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
 
   if (authError) {
-    console.error("[auth/register] Step 1 failed:", authError.message);
-    if (authError.message.includes("already registered")) {
-      throw new Error("Email already registered. Please log in.");
-    }
+    console.error("[auth/register] Auth error:", authError.message);
     throw new Error(authError.message);
   }
 
-  const user = authData.user;
-  if (!user) {
-    throw new Error("Failed to create user");
-  }
+  const userId = authData.user.id;
+  console.log("[auth/register] Step 1 OK: Auth user created", { userId });
 
-  console.log("[auth/register] Step 1 OK: Auth user created", { userId: user.id });
-
-  const slug = slugFromName(input.workspaceName);
-
-  // Step 2: Create workspace
-  console.log("[auth/register] Step 2: Inserting workspace", { slug, ownerId: user.id });
-  const { data: workspaceData, error: workspaceError } = await supabase
+  // Step 2: Insert workspace
+  const slug = workspaceName.toLowerCase().replace(/\s+/g, "-");
+  console.log("[auth/register] Step 2: Insert workspace", { slug, userId });
+  const { data: workspace, error: wsError } = await supabase
     .from("workspaces")
-    .insert({
-      name: input.workspaceName,
-      slug: slug,
-      owner_id: user.id, // Ensure naming matches schema (Drizzle mapped ownerId to owner_id)
-    })
+    .insert({ name: workspaceName, slug, owner_id: userId })
     .select()
     .single();
 
-  if (workspaceError) {
-    console.error("[auth/register] Step 2 failed:", workspaceError);
-    // Cleanup auth user if possible or just log it
-    throw new Error(`Failed to create workspace: ${workspaceError.message}`);
+  if (wsError) {
+    console.error("[auth/register] Workspace error:", wsError.message);
+    throw new Error(wsError.message);
   }
 
-  console.log("[auth/register] Step 2 OK: Workspace created", { workspaceId: workspaceData.id });
+  console.log("[auth/register] Step 2 OK: Workspace created", {
+    workspaceId: workspace.id,
+  });
 
-  // Step 3: Create user record in our users table
-  console.log("[auth/register] Step 3: Inserting user row", { workspaceId: workspaceData.id, supabaseUserId: user.id });
-  const { error: userError } = await supabase
-    .from("users")
-    .insert({
-      workspace_id: workspaceData.id,
-      email: input.email,
-      supabase_user_id: user.id,
-      role: "owner",
-    });
+  // Step 3: Insert user record
+  console.log("[auth/register] Step 3: Insert user record", {
+    workspaceId: workspace.id,
+    userId,
+  });
+  const { error: userError } = await supabase.from("users").insert({
+    workspace_id: workspace.id,
+    supabase_user_id: userId,
+    email,
+    role: "owner",
+  });
 
   if (userError) {
-    console.error("[auth/register] Step 3 failed:", userError);
-    throw new Error(`Failed to create user record: ${userError.message}`);
+    console.error("[auth/register] User record error:", userError.message);
+    throw new Error(userError.message);
   }
 
   console.log("[auth/register] Step 3 OK: User row created");
 
-  // For login after registration, we'll need a session. 
-  // Since we used admin.createUser, we have to sign them in manually to get a session.
-  const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-    email: input.email,
-    password: input.password,
-  });
+  // Step 4: Get session
+  console.log("[auth/register] Step 4: Sign in to get session");
+  const { data: sessionData, error: sessionError } =
+    await supabase.auth.signInWithPassword({ email, password });
 
-  if (loginError) {
-    console.error("[auth/register] Sign in failed after registration:", loginError.message);
+  if (sessionError) {
+    console.error("[auth/register] Session error:", sessionError.message);
+    throw new Error(sessionError.message);
   }
 
   return {
-    user: { id: user.id, email: user.email },
-    workspace: { id: workspaceData.id, name: workspaceData.name, slug: workspaceData.slug },
-    session: loginData?.session || null,
+    user: { id: userId, email },
+    session: sessionData.session,
   };
-}
+};
 
-/**
- * Login: authenticate via Supabase Auth and return session (JWT).
- */
-export async function login(input: LoginInput) {
-  const {
-    data: { user, session },
-    error,
-  } = await supabase.auth.signInWithPassword({
-    email: input.email,
-    password: input.password,
+export const login = async (input: LoginInput) => {
+  const { email, password } = input;
+  console.log("[auth/login] Sign in");
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   });
 
-  if (error) throw new Error(error.message);
-  if (!user || !session) throw new Error("Login failed");
+  if (error) {
+    console.error("[auth/login] Sign in error:", error.message);
+    throw new Error(error.message);
+  }
 
-  return { user: { id: user.id, email: user.email }, session };
-}
+  // Get workspace and user data
+  console.log("[auth/login] Fetching workspace/user data", {
+    userId: data.user.id,
+  });
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("workspace_id, workspaces(name)")
+    .eq("supabase_user_id", data.user.id)
+    .single();
+
+  if (userError) {
+    console.warn("[auth/login] Failed to fetch workspace data:", userError.message);
+  }
+
+  return {
+    user: { id: data.user.id, email: data.user.email },
+    session: data.session,
+    workspace: userData,
+  };
+};

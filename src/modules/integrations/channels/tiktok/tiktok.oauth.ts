@@ -15,22 +15,21 @@ export function generateAuthUrl(workspaceId: string): string {
 
 export const handleCallback = async (code: string, state: string) => {
   try {
-    // state contains workspaceId
     const workspaceId = state;
+    const tokenUrl = "https://auth.tiktok-shops.com/api/v2/token/get";
 
-    // Exchange code for token using TikTok API
-    const tokenResponse = await fetch("https://auth.tiktok-shops.com/api/v2/token/get", {
-      method: "POST",
+    const params = new URLSearchParams({
+      app_key: env.TIKTOK_APP_KEY ?? "",
+      app_secret: env.TIKTOK_APP_SECRET ?? "",
+      auth_code: code,
+      grant_type: "authorized_code",
+    });
+
+    const tokenResponse = await fetch(`${tokenUrl}?${params.toString()}`, {
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
-        "x-tts-access-token": "",
       },
-      body: JSON.stringify({
-        app_key: env.TIKTOK_APP_KEY,
-        app_secret: env.TIKTOK_APP_SECRET,
-        auth_code: code,
-        grant_type: "authorized_code",
-      }),
     });
 
     // Get raw text first for debugging
@@ -38,21 +37,26 @@ export const handleCallback = async (code: string, state: string) => {
     console.log("[tiktok] Raw response:", rawText);
     console.log("[tiktok] Status:", tokenResponse.status);
 
-    // Then parse
     let tokenData: any;
     try {
       tokenData = JSON.parse(rawText);
     } catch (e) {
-      throw new Error(`Invalid JSON from TikTok: ${rawText.substring(0, 200)}`);
+      throw new Error(`Invalid JSON from TikTok Shop: ${rawText.substring(0, 500)}`);
     }
 
-    console.log("[tiktok] Parsed token data:", JSON.stringify(tokenData));
+    console.log("[tiktok] Token data:", JSON.stringify(tokenData));
 
     if (tokenData.code !== 0) {
-      throw new Error(`TikTok token error: ${tokenData.message}`);
+      throw new Error(`TikTok Shop error ${tokenData.code}: ${tokenData.message}`);
     }
 
-    const { access_token, refresh_token, expire_in, open_id, seller_name } = tokenData.data;
+    const {
+      access_token,
+      refresh_token,
+      access_token_expire_in,
+      open_id,
+      seller_name,
+    } = tokenData.data;
 
     // Save to integrations table
     const { error } = await supabase
@@ -63,7 +67,7 @@ export const handleCallback = async (code: string, state: string) => {
           channel: "tiktok",
           access_token,
           refresh_token,
-          token_expires_at: new Date(Date.now() + expire_in * 1000).toISOString(),
+          token_expires_at: new Date(Date.now() + access_token_expire_in * 1000).toISOString(),
           shop_id: open_id,
           shop_name: seller_name || "TikTok Shop",
           is_active: true,

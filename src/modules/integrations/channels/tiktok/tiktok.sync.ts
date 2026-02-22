@@ -1,4 +1,5 @@
 import { supabase } from "../../../../db/client.js";
+import { env } from "../../../../config/env.js";
 
 // Get integration from database
 const getIntegration = async (workspaceId: string) => {
@@ -22,7 +23,7 @@ export const syncOrders = async (workspaceId: string) => {
   const now = Math.floor(Date.now() / 1000);
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
 
-  const url = "https://open-api.tiktokglobalshop.com/order/202309/orders/search";
+  const url = `https://open-api.tiktokglobalshop.com/order/202309/orders/search?app_key=${env.TIKTOK_APP_KEY}`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -88,7 +89,7 @@ export const syncProducts = async (workspaceId: string) => {
   const integration = await getIntegration(workspaceId);
   const accessToken = integration.access_token;
 
-  const url = "https://open-api.tiktokglobalshop.com/product/202309/products/search";
+  const url = `https://open-api.tiktokglobalshop.com/product/202309/products/search?app_key=${env.TIKTOK_APP_KEY}`;
 
   const response = await fetch(url, {
     method: "POST",

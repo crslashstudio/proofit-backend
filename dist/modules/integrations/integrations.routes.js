@@ -47,6 +47,21 @@ app.post("/tiktok/sync", async (c) => {
         return c.json({ success: false, error: e.message }, 500);
     }
 });
+/**
+ * DELETE /integrations/tiktok
+ * Deactivates TikTok Shop integration.
+ */
+app.delete("/tiktok", async (c) => {
+    const workspaceId = c.get("workspaceId");
+    try {
+        await integrationsService.deactivateTikTokIntegration(workspaceId);
+        return c.json({ success: true });
+    }
+    catch (e) {
+        console.error("[tiktok/delete] Deactivation error:", e);
+        return c.json({ success: false, error: e.message }, 500);
+    }
+});
 export default app;
 /**
  * Public OAuth callback (no JWT). Mount at GET /integrations/tiktok/callback without auth middleware.

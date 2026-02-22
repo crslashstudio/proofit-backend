@@ -1,10 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-import { env } from "../../config/env.js";
-import { db } from "../../db/client.js";
-import { users } from "../../db/schema/users.js";
-import { workspaces } from "../../db/schema/workspaces.js";
-
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+import { supabase } from "../../db/client.js";
 
 export interface RegisterInput {
   email: string;
@@ -31,92 +25,85 @@ function slugFromName(name: string): string {
  * Multi-tenant: one workspace per signup; owner_id and users row establish isolation.
  */
 export async function register(input: RegisterInput) {
-  console.log("[auth/register] Step 1: Supabase signUp", { email: input.email });
-  const {
-    data: { user, session: signUpSession },
-    error: authError,
-  } = await supabase.auth.signUp({
+  console.log("[auth/register] Step 1: Creating auth user via admin API", { email: input.email });
+
+  // Use admin API to create user directly without email confirmation for now
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: input.email,
     password: input.password,
-    options: { emailRedirectTo: undefined },
+    email_confirm: true,
   });
 
   if (authError) {
-    console.error("[auth/register] Step 1 failed: Supabase auth error", authError.message);
-    // Supabase returns "User already registered" (or similar) when email exists
-    const msg = authError.message.toLowerCase();
-    if (
-      msg.includes("already registered") ||
-      msg.includes("already been registered") ||
-      authError.message === "User already registered"
-    ) {
+    console.error("[auth/register] Step 1 failed:", authError.message);
+    if (authError.message.includes("already registered")) {
       throw new Error("Email already registered. Please log in.");
     }
     throw new Error(authError.message);
   }
+
+  const user = authData.user;
   if (!user) {
-    console.error("[auth/register] Step 1 failed: No user returned from Supabase");
     throw new Error("Failed to create user");
   }
-  console.log("[auth/register] Step 1 OK: Supabase user created", { userId: user.id });
+
+  console.log("[auth/register] Step 1 OK: Auth user created", { userId: user.id });
 
   const slug = slugFromName(input.workspaceName);
-  console.log("[auth/register] Step 2: Starting DB transaction", { slug, ownerId: user.id });
 
-  let workspace;
-  try {
-    workspace = await db.transaction(async (tx) => {
-      console.log("[auth/register] Transaction: Inserting workspace...");
-      const results = await tx
-        .insert(workspaces)
-        .values({
-          name: input.workspaceName,
-          slug: slug,
-          ownerId: user.id,
-        })
-        .returning();
+  // Step 2: Create workspace
+  console.log("[auth/register] Step 2: Inserting workspace", { slug, ownerId: user.id });
+  const { data: workspaceData, error: workspaceError } = await supabase
+    .from("workspaces")
+    .insert({
+      name: input.workspaceName,
+      slug: slug,
+      owner_id: user.id, // Ensure naming matches schema (Drizzle mapped ownerId to owner_id)
+    })
+    .select()
+    .single();
 
-      const w = results[0];
-      if (!w) {
-        console.error("[auth/register] Transaction: Workspace insert returned no data");
-        throw new Error("Failed to create workspace: No data returned");
-      }
-      console.log("[auth/register] Step 2 OK: Workspace created", { workspaceId: w.id });
-
-      console.log("[auth/register] Step 3: Inserting user row", { workspaceId: w.id, supabaseUserId: user.id });
-      await tx.insert(users).values({
-        workspaceId: w.id,
-        email: input.email,
-        supabaseUserId: user.id,
-        role: "owner",
-      });
-      console.log("[auth/register] Step 3 OK: User row created");
-      return w;
-    });
-  } catch (txError: any) {
-    console.error("[auth/register] Registration transaction failed:", {
-      message: txError.message,
-      code: txError.code,
-      detail: txError.detail,
-      stack: txError.stack
-    });
-
-    // Check for specific database errors
-    if (txError.message?.includes("Tenant or user not found") || txError.code === "XX000") {
-      throw new Error("Database error (Tenant or user not found). This usually indicates a configuration issue with the Supabase connection pooler.");
-    }
-
-    throw new Error(`Registration failed during database setup: ${txError.message || "Unknown error"}`);
+  if (workspaceError) {
+    console.error("[auth/register] Step 2 failed:", workspaceError);
+    // Cleanup auth user if possible or just log it
+    throw new Error(`Failed to create workspace: ${workspaceError.message}`);
   }
 
-  // Prefer session from signUp response so the client gets the token for the user we just created.
-  // getSession() can be null if email confirmation is required or storage hasn't updated yet.
-  const session = signUpSession ?? (await supabase.auth.getSession()).data.session;
-  console.log("[auth/register] Done: returning session", !!session, session ? "from signUp" : "fallback null");
+  console.log("[auth/register] Step 2 OK: Workspace created", { workspaceId: workspaceData.id });
+
+  // Step 3: Create user record in our users table
+  console.log("[auth/register] Step 3: Inserting user row", { workspaceId: workspaceData.id, supabaseUserId: user.id });
+  const { error: userError } = await supabase
+    .from("users")
+    .insert({
+      workspace_id: workspaceData.id,
+      email: input.email,
+      supabase_user_id: user.id,
+      role: "owner",
+    });
+
+  if (userError) {
+    console.error("[auth/register] Step 3 failed:", userError);
+    throw new Error(`Failed to create user record: ${userError.message}`);
+  }
+
+  console.log("[auth/register] Step 3 OK: User row created");
+
+  // For login after registration, we'll need a session. 
+  // Since we used admin.createUser, we have to sign them in manually to get a session.
+  const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+    email: input.email,
+    password: input.password,
+  });
+
+  if (loginError) {
+    console.error("[auth/register] Sign in failed after registration:", loginError.message);
+  }
+
   return {
     user: { id: user.id, email: user.email },
-    workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug },
-    session,
+    workspace: { id: workspaceData.id, name: workspaceData.name, slug: workspaceData.slug },
+    session: loginData?.session || null,
   };
 }
 

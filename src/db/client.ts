@@ -1,27 +1,23 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as workspaces from "./schema/workspaces.js";
-import * as users from "./schema/users.js";
-import * as integrations from "./schema/integrations.js";
-import * as orders from "./schema/orders.js";
-import * as skus from "./schema/skus.js";
-import * as campaigns from "./schema/campaigns.js";
+import { createClient } from "@supabase/supabase-js";
 import { env } from "../config/env.js";
 
-// Log connection shape (password redacted) so you can confirm direct vs pooler
-try {
-  const u = new URL(env.DATABASE_URL);
-  console.log(
-    "[db] Connecting:",
-    u.hostname,
-    "port",
-    u.port || "5432",
-    "user",
-    u.username
-  );
-} catch {
-  /* ignore */
-}
+// Use Supabase JS client for all database operations instead of Drizzle ORM
+// to solve connection pooling issues with "Tenant or user not found" (XX000).
+export const supabase = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
+);
+
+// We keep the drizzle export for now if needed by other services not yet migrated,
+// but the recommendation is to use the 'supabase' client above.
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 const client = postgres(env.DATABASE_URL, {
   ssl: { rejectUnauthorized: false },
@@ -30,15 +26,6 @@ const client = postgres(env.DATABASE_URL, {
   connect_timeout: 10,
 });
 
-export const db = drizzle(client, {
-  schema: {
-    ...workspaces,
-    ...users,
-    ...integrations,
-    ...orders,
-    ...skus,
-    ...campaigns,
-  },
-});
+export const db = drizzle(client);
 
 export type Database = typeof db;

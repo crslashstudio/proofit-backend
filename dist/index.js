@@ -1,6 +1,5 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { env } from "./config/env.js";
 import { authMiddleware } from "./middlewares/auth.middleware.js";
@@ -14,12 +13,26 @@ import campaignsRoutes from "./modules/campaigns/campaigns.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
 import { showRoutes } from "hono/dev";
 const app = new Hono();
+app.use('*', async (c, next) => {
+    const origin = c.req.header('Origin') || '';
+    const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://proofit-frontend.vercel.app',
+    ];
+    if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        c.header('Access-Control-Allow-Origin', origin);
+    }
+    c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    c.header('Access-Control-Allow-Credentials', 'true');
+    c.header('Access-Control-Max-Age', '600');
+    if (c.req.method === 'OPTIONS') {
+        return c.text('', 204);
+    }
+    return await next();
+});
 app.use("*", logger());
-app.use("*", cors({
-    origin: ["http://localhost:3000", "http://localhost:5173"],
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-}));
 app.onError((err, c) => {
     console.error(err);
     return c.json({ success: false, error: err.message ?? "Internal server error" }, 500);

@@ -14,6 +14,7 @@ const envSchema = z.object({
   TIKTOK_APP_KEY: z.string().optional(),
   TIKTOK_APP_SECRET: z.string().optional(),
   TIKTOK_REDIRECT_URI: z.string().url().optional(),
+  FRONTEND_URL: z.string().url().default("http://localhost:5173"),
 
   GEMINI_API_KEY: z.string().optional(),
 });

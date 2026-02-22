@@ -1,8 +1,7 @@
 import { env } from "../../../../config/env.js";
-import * as integrationsService from "../../integrations.service.js";
+import { supabase } from "../../../../db/client.js";
 
 const TIKTOK_AUTH_URL = "https://auth.tiktok-shops.com/oauth/authorize";
-const TIKTOK_TOKEN_URL = "https://auth.tiktok-shop.com/api/v2/token/get";
 
 export function generateAuthUrl(workspaceId: string): string {
   const params = new URLSearchParams({
@@ -14,50 +13,56 @@ export function generateAuthUrl(workspaceId: string): string {
   return `${TIKTOK_AUTH_URL}?${params.toString()}`;
 }
 
-export async function handleCallback(code: string, state: string): Promise<void> {
-  if (!env.TIKTOK_APP_KEY || !env.TIKTOK_APP_SECRET || !env.TIKTOK_REDIRECT_URI) {
-    throw new Error("TikTok integration is not configured");
+export const handleCallback = async (code: string, state: string) => {
+  try {
+    // state contains workspaceId
+    const workspaceId = state;
+
+    // Exchange code for token using TikTok API
+    const tokenResponse = await fetch("https://auth.tiktok-shops.com/api/v2/token/get", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        app_key: env.TIKTOK_APP_KEY,
+        app_secret: env.TIKTOK_APP_SECRET,
+        auth_code: code,
+        grant_type: "authorized_code",
+      }),
+    });
+
+    const tokenData = (await tokenResponse.json()) as any;
+    console.log("[tiktok] Token response:", JSON.stringify(tokenData));
+
+    if (tokenData.code !== 0) {
+      throw new Error(`TikTok token error: ${tokenData.message}`);
+    }
+
+    const { access_token, refresh_token, expire_in, open_id, seller_name } = tokenData.data;
+
+    // Save to integrations table
+    const { error } = await supabase
+      .from("integrations")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          channel: "tiktok",
+          access_token,
+          refresh_token,
+          token_expires_at: new Date(Date.now() + expire_in * 1000).toISOString(),
+          shop_id: open_id,
+          shop_name: seller_name || "TikTok Shop",
+          is_active: true,
+        },
+        { onConflict: "workspace_id,channel" }
+      );
+
+    if (error) throw new Error(error.message);
+
+    return { success: true, shopName: seller_name };
+  } catch (error: any) {
+    console.error("[tiktok] Callback error:", error.message);
+    throw error;
   }
-
-  const workspaceId = state;
-  if (!workspaceId) {
-    throw new Error("Invalid state: workspaceId missing");
-  }
-
-  const body = new URLSearchParams({
-    app_key: env.TIKTOK_APP_KEY,
-    app_secret: env.TIKTOK_APP_SECRET,
-    auth_code: code,
-    grant_type: "authorized_code",
-    redirect_uri: env.TIKTOK_REDIRECT_URI,
-  });
-
-  const res = await fetch(TIKTOK_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`TikTok token exchange failed: ${res.status} ${err}`);
-  }
-
-  const data = (await res.json()) as {
-    data?: { access_token?: string; refresh_token?: string; expires_in?: number };
-    message?: string;
-  };
-
-  const d = data.data;
-  if (!d?.access_token) {
-    throw new Error(data.message ?? "Invalid TikTok token response");
-  }
-
-  await integrationsService.upsertTikTokIntegration(workspaceId, {
-    accessToken: d.access_token,
-    refreshToken: d.refresh_token,
-    expiresIn: d.expires_in ?? 86400,
-  });
-}
+};
 
 

@@ -10,6 +10,7 @@ declare const envSchema: z.ZodObject<{
     TIKTOK_APP_KEY: z.ZodOptional<z.ZodString>;
     TIKTOK_APP_SECRET: z.ZodOptional<z.ZodString>;
     TIKTOK_REDIRECT_URI: z.ZodOptional<z.ZodString>;
+    FRONTEND_URL: z.ZodDefault<z.ZodString>;
     GEMINI_API_KEY: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     NODE_ENV: "development" | "production" | "test";
@@ -18,6 +19,7 @@ declare const envSchema: z.ZodObject<{
     SUPABASE_ANON_KEY: string;
     SUPABASE_SERVICE_ROLE_KEY: string;
     DATABASE_URL: string;
+    FRONTEND_URL: string;
     TIKTOK_APP_KEY?: string | undefined;
     TIKTOK_APP_SECRET?: string | undefined;
     TIKTOK_REDIRECT_URI?: string | undefined;
@@ -32,6 +34,7 @@ declare const envSchema: z.ZodObject<{
     TIKTOK_APP_KEY?: string | undefined;
     TIKTOK_APP_SECRET?: string | undefined;
     TIKTOK_REDIRECT_URI?: string | undefined;
+    FRONTEND_URL?: string | undefined;
     GEMINI_API_KEY?: string | undefined;
 }>;
 export type Env = z.infer<typeof envSchema>;
@@ -42,6 +45,7 @@ export declare const env: {
     SUPABASE_ANON_KEY: string;
     SUPABASE_SERVICE_ROLE_KEY: string;
     DATABASE_URL: string;
+    FRONTEND_URL: string;
     TIKTOK_APP_KEY?: string | undefined;
     TIKTOK_APP_SECRET?: string | undefined;
     TIKTOK_REDIRECT_URI?: string | undefined;

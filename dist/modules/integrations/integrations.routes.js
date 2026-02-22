@@ -33,16 +33,17 @@ export const tiktokCallbackApp = new Hono().get("/", async (c) => {
     const state = c.req.query("state");
     if (!code || !state) {
         console.error("[tiktok/callback] Missing code or state", { code, state });
-        return c.redirect("/integrations?error=Missing+code+or+state");
+        return c.redirect(`${env.FRONTEND_URL}/settings?tiktok=error&message=${encodeURIComponent("Missing code or state")}`);
     }
     try {
-        await handleCallback(code, state);
+        const result = await handleCallback(code, state);
+        console.log("[tiktok/callback] Success:", result);
+        return c.redirect(`${env.FRONTEND_URL}/settings?tiktok=connected`);
     }
     catch (e) {
+        console.error("[tiktok/callback] Full Error:", e);
         const message = e instanceof Error ? e.message : "OAuth failed";
-        console.error("[tiktok/callback] Error:", message);
-        return c.redirect(`/integrations?error=${encodeURIComponent(message)}`);
+        return c.redirect(`${env.FRONTEND_URL}/settings?tiktok=error&message=${encodeURIComponent(message)}`);
     }
-    return c.redirect("/integrations?connected=tiktok");
 });
 //# sourceMappingURL=integrations.routes.js.map

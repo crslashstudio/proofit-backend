@@ -17,7 +17,10 @@ export const handleCallback = async (code, state) => {
         // Exchange code for token using TikTok API
         const tokenResponse = await fetch("https://auth.tiktok-shops.com/api/v2/token/get", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "x-tts-access-token": "",
+            },
             body: JSON.stringify({
                 app_key: env.TIKTOK_APP_KEY,
                 app_secret: env.TIKTOK_APP_SECRET,
@@ -25,8 +28,19 @@ export const handleCallback = async (code, state) => {
                 grant_type: "authorized_code",
             }),
         });
-        const tokenData = (await tokenResponse.json());
-        console.log("[tiktok] Token response:", JSON.stringify(tokenData));
+        // Get raw text first for debugging
+        const rawText = await tokenResponse.text();
+        console.log("[tiktok] Raw response:", rawText);
+        console.log("[tiktok] Status:", tokenResponse.status);
+        // Then parse
+        let tokenData;
+        try {
+            tokenData = JSON.parse(rawText);
+        }
+        catch (e) {
+            throw new Error(`Invalid JSON from TikTok: ${rawText.substring(0, 200)}`);
+        }
+        console.log("[tiktok] Parsed token data:", JSON.stringify(tokenData));
         if (tokenData.code !== 0) {
             throw new Error(`TikTok token error: ${tokenData.message}`);
         }

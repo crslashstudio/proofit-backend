@@ -1,1 +1,1 @@
-{"version":3,"file":"tiktok.oauth.d.ts","sourceRoot":"","sources":["../../../../../src/modules/integrations/channels/tiktok/tiktok.oauth.ts"],"names":[],"mappings":"AAKA,wBAAgB,eAAe,CAAC,WAAW,EAAE,MAAM,GAAG,MAAM,CAQ3D;AAED,eAAO,MAAM,cAAc,GAAU,MAAM,MAAM,EAAE,OAAO,MAAM;;;EAkD/D,CAAC"}
+{"version":3,"file":"tiktok.oauth.d.ts","sourceRoot":"","sources":["../../../../../src/modules/integrations/channels/tiktok/tiktok.oauth.ts"],"names":[],"mappings":"AAKA,wBAAgB,eAAe,CAAC,WAAW,EAAE,MAAM,GAAG,MAAM,CAQ3D;AAED,eAAO,MAAM,cAAc,GAAU,MAAM,MAAM,EAAE,OAAO,MAAM;;;EAiE/D,CAAC"}

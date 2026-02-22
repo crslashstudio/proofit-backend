@@ -55,6 +55,21 @@ app.post("/tiktok/sync", async (c) => {
   }
 });
 
+/**
+ * DELETE /integrations/tiktok
+ * Deactivates TikTok Shop integration.
+ */
+app.delete("/tiktok", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  try {
+    await integrationsService.deactivateTikTokIntegration(workspaceId);
+    return c.json({ success: true });
+  } catch (e: any) {
+    console.error("[tiktok/delete] Deactivation error:", e);
+    return c.json({ success: false, error: e.message }, 500);
+  }
+});
+
 export default app;
 
 /**

@@ -97,3 +97,20 @@ export async function getIntegrationById(
 
   return data;
 }
+
+export async function deactivateTikTokIntegration(workspaceId: string) {
+  const { data, error } = await supabase
+    .from("integrations")
+    .update({ is_active: false })
+    .eq("workspace_id", workspaceId)
+    .eq("channel", "tiktok")
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error("[integrations.service] deactivateTikTokIntegration failed:", error.message);
+    throw new Error(error.message);
+  }
+
+  return data;
+}

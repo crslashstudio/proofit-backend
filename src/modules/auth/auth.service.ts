@@ -61,12 +61,13 @@ export async function register(input: RegisterInput) {
   console.log("[auth/register] Step 1 OK: Supabase user created", { userId: user.id });
 
   const slug = slugFromName(input.workspaceName);
-  console.log("[auth/register] Step 2: Insert workspace", { slug, ownerId: user.id });
+  console.log("[auth/register] Step 2: Starting DB transaction", { slug, ownerId: user.id });
 
-  let workspace: { id: string; name: string; slug: string };
+  let workspace;
   try {
     workspace = await db.transaction(async (tx) => {
-      const [w] = await tx
+      console.log("[auth/register] Transaction: Inserting workspace...");
+      const results = await tx
         .insert(workspaces)
         .values({
           name: input.workspaceName,
@@ -74,10 +75,15 @@ export async function register(input: RegisterInput) {
           ownerId: user.id,
         })
         .returning();
-      if (!w) throw new Error("Failed to create workspace");
+
+      const w = results[0];
+      if (!w) {
+        console.error("[auth/register] Transaction: Workspace insert returned no data");
+        throw new Error("Failed to create workspace: No data returned");
+      }
       console.log("[auth/register] Step 2 OK: Workspace created", { workspaceId: w.id });
 
-      console.log("[auth/register] Step 3: Insert user row", { workspaceId: w.id, supabaseUserId: user.id });
+      console.log("[auth/register] Step 3: Inserting user row", { workspaceId: w.id, supabaseUserId: user.id });
       await tx.insert(users).values({
         workspaceId: w.id,
         email: input.email,
@@ -87,18 +93,20 @@ export async function register(input: RegisterInput) {
       console.log("[auth/register] Step 3 OK: User row created");
       return w;
     });
-  } catch (txError: unknown) {
-    console.error("[auth/register] Step 2/3 failed (workspace or user insert):", txError);
-    const msg = txError instanceof Error ? txError.message : String(txError);
-    const isSupabaseTenantError =
-      msg.includes("Tenant or user not found") &&
-      (txError as { code?: string })?.code === "XX000";
-    if (isSupabaseTenantError) {
-      throw new Error(
-        "Database connection error (Tenant or user not found). For local dev use DIRECT connection in .env: DATABASE_URL=postgresql://postgres:[PASSWORD]@db.akkzcmxwzoynxvvjkaps.supabase.co:5432/postgres (port 5432, not 6543)."
-      );
+  } catch (txError: any) {
+    console.error("[auth/register] Registration transaction failed:", {
+      message: txError.message,
+      code: txError.code,
+      detail: txError.detail,
+      stack: txError.stack
+    });
+
+    // Check for specific database errors
+    if (txError.message?.includes("Tenant or user not found") || txError.code === "XX000") {
+      throw new Error("Database error (Tenant or user not found). This usually indicates a configuration issue with the Supabase connection pooler.");
     }
-    throw txError;
+
+    throw new Error(`Registration failed during database setup: ${txError.message || "Unknown error"}`);
   }
 
   // Prefer session from signUp response so the client gets the token for the user we just created.

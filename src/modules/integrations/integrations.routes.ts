@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { AuthEnv } from "../../middlewares/auth.middleware.js";
 import * as integrationsService from "./integrations.service.js";
-import { getTikTokAuthorizeUrl, exchangeTikTokCode } from "./channels/tiktok/tiktok.oauth.js";
+import { generateAuthUrl, handleCallback } from "./channels/tiktok/tiktok.oauth.js";
 import { env } from "../../config/env.js";
 
 const app = new Hono<AuthEnv>();
@@ -17,10 +17,10 @@ app.get("/", async (c) => {
 });
 
 /**
- * POST /integrations/tiktok/connect
+ * GET /integrations/tiktok/connect
  * Initiates TikTok OAuth: returns redirect URL. Frontend redirects user there.
  */
-app.post("/tiktok/connect", async (c) => {
+app.get("/tiktok/connect", async (c) => {
   if (!env.TIKTOK_APP_KEY || !env.TIKTOK_APP_SECRET || !env.TIKTOK_REDIRECT_URI) {
     return c.json(
       { success: false, error: "TikTok integration is not configured" },
@@ -28,45 +28,31 @@ app.post("/tiktok/connect", async (c) => {
     );
   }
   const workspaceId = c.get("workspaceId");
-  const state = `${workspaceId}:${Date.now()}`;
-  const url = getTikTokAuthorizeUrl(state);
-  return c.json({ success: true, data: { redirectUrl: url, state } });
+  const url = generateAuthUrl(workspaceId);
+  return c.json({ success: true, data: { authUrl: url } });
 });
 
 export default app;
 
 /**
  * Public OAuth callback (no JWT). Mount at GET /integrations/tiktok/callback without auth middleware.
- * state = workspaceId:timestamp for multi-tenant token storage.
  */
 export const tiktokCallbackApp = new Hono().get("/", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state");
+
   if (!code || !state) {
-    return c.json({ success: false, error: "Missing code or state" }, 400);
+    console.error("[tiktok/callback] Missing code or state", { code, state });
+    return c.redirect("/integrations?error=Missing+code+or+state");
   }
-  const [workspaceId] = state.split(":");
-  if (!workspaceId) {
-    return c.json({ success: false, error: "Invalid state" }, 400);
-  }
-  if (!env.TIKTOK_APP_KEY || !env.TIKTOK_APP_SECRET || !env.TIKTOK_REDIRECT_URI) {
-    return c.json({ success: false, error: "TikTok integration is not configured" }, 503);
-  }
+
   try {
-    const tokens = await exchangeTikTokCode(
-      code,
-      env.TIKTOK_APP_KEY,
-      env.TIKTOK_APP_SECRET,
-      env.TIKTOK_REDIRECT_URI
-    );
-    await integrationsService.upsertTikTokIntegration(workspaceId, {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresIn: tokens.expires_in,
-    });
+    await handleCallback(code, state);
   } catch (e) {
     const message = e instanceof Error ? e.message : "OAuth failed";
-    return c.json({ success: false, error: message }, 400);
+    console.error("[tiktok/callback] Error:", message);
+    return c.redirect(`/integrations?error=${encodeURIComponent(message)}`);
   }
+
   return c.redirect("/integrations?connected=tiktok");
 });

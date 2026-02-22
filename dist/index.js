@@ -12,6 +12,7 @@ import ordersRoutes from "./modules/orders/orders.routes.js";
 import skusRoutes from "./modules/skus/skus.routes.js";
 import campaignsRoutes from "./modules/campaigns/campaigns.routes.js";
 import aiRoutes from "./modules/ai/ai.routes.js";
+import { showRoutes } from "hono/dev";
 const app = new Hono();
 app.use("*", logger());
 app.use("*", cors({
@@ -45,4 +46,7 @@ app.get("/health", (c) => c.json({ success: true, data: { status: "ok" } }));
 export default app;
 serve({ fetch: app.fetch, port: env.PORT });
 console.log(`PROOFIT backend running at http://localhost:${env.PORT}`);
+// Show all registered routes on startup
+console.log("\nRegistered Routes:");
+showRoutes(app);
 //# sourceMappingURL=index.js.map

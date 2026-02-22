@@ -1,23 +1,30 @@
 import { env } from "../../../../config/env.js";
-const TIKTOK_AUTH_URL = "https://auth.tiktok-shop.com/oauth/authorize";
+import * as integrationsService from "../../integrations.service.js";
+const TIKTOK_AUTH_URL = "https://auth.tiktok-shops.com/oauth/authorize";
 const TIKTOK_TOKEN_URL = "https://auth.tiktok-shop.com/api/v2/token/get";
-export function getTikTokAuthorizeUrl(state) {
+export function generateAuthUrl(workspaceId) {
     const params = new URLSearchParams({
         app_key: env.TIKTOK_APP_KEY ?? "",
-        state,
-        response_type: "code",
         redirect_uri: env.TIKTOK_REDIRECT_URI ?? "",
-        scope: "shop_analytics,order_read,product_read",
+        state: workspaceId,
+        scope: "shop.read,order.read,product.read,finance.read",
     });
     return `${TIKTOK_AUTH_URL}?${params.toString()}`;
 }
-export async function exchangeTikTokCode(code, appKey, appSecret, redirectUri) {
+export async function handleCallback(code, state) {
+    if (!env.TIKTOK_APP_KEY || !env.TIKTOK_APP_SECRET || !env.TIKTOK_REDIRECT_URI) {
+        throw new Error("TikTok integration is not configured");
+    }
+    const workspaceId = state;
+    if (!workspaceId) {
+        throw new Error("Invalid state: workspaceId missing");
+    }
     const body = new URLSearchParams({
-        app_key: appKey,
-        app_secret: appSecret,
+        app_key: env.TIKTOK_APP_KEY,
+        app_secret: env.TIKTOK_APP_SECRET,
         auth_code: code,
         grant_type: "authorized_code",
-        redirect_uri: redirectUri,
+        redirect_uri: env.TIKTOK_REDIRECT_URI,
     });
     const res = await fetch(TIKTOK_TOKEN_URL, {
         method: "POST",
@@ -33,10 +40,10 @@ export async function exchangeTikTokCode(code, appKey, appSecret, redirectUri) {
     if (!d?.access_token) {
         throw new Error(data.message ?? "Invalid TikTok token response");
     }
-    return {
-        access_token: d.access_token,
-        refresh_token: d.refresh_token,
-        expires_in: d.expires_in ?? 86400,
-    };
+    await integrationsService.upsertTikTokIntegration(workspaceId, {
+        accessToken: d.access_token,
+        refreshToken: d.refresh_token,
+        expiresIn: d.expires_in ?? 86400,
+    });
 }
 //# sourceMappingURL=tiktok.oauth.js.map
